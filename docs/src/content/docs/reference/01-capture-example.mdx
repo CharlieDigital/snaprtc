@@ -1,0 +1,175 @@
+---
+title: Capture Example
+description: This page is a sample capture page.
+---
+
+import { SIGNALING_SERVER } from '../../../environment'
+import SnapRTCCapture from '../../../components/vue/snaprtc-capture.vue'
+
+This page is an example implementation of a capture endpoint.  When you scan the QR code, you will be redirected here on your device to actually perform the capture.
+
+Go to the [Vue example](/get-started/03-vue-example) to initiate the flow.
+
+## Capture Component
+
+<SnapRTCCapture
+  signaling-server={SIGNALING_SERVER}
+  client:only/>
+
+## Learn More
+
+To learn more about how to implement this yourself, see [the Mozilla docs on media capture](https://developer.mozilla.org/en-US/docs/Web/API/Media_Capture_and_Streams_API/Taking_still_photos) that the capture code is taken from.
+
+## Sample Vue Implementation
+
+[The reference implementation in Vue is available in the repo](https://github.com/CharlieDigital/snaprtc/blob/main/docs/src/components/vue/snaprtc-capture.vue).
+
+```vue
+<template>
+  <div class="wrapper">
+    <div v-if="sessionId" class="header">
+      Connected to session: <strong>{{ sessionId }}</strong>
+    </div>
+    <div class="container">
+      <!-- No session info in the URL; the user just browsed to this page -->
+      <div v-if="!sessionId" style="opacity: 0.7; font-style: oblique;">
+        There's no session; start from one of the example pages.
+      </div>
+      <div v-else>
+        <!-- The user has session; we show the button to activate the camera -->
+        <button
+          v-if="showCameraButton && !started"
+          @click="handleStartCamera">
+          Start Camera
+        </button>
+        <!-- The actual camera -->
+        <div v-if="started" id="camera">
+          <video id="video" ref="video"></video>
+          <button id="shutter" @click="handleShutterClick">Capture and Transfer</button>
+          <canvas id="stage" ref="stage" style="display: block"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, watch } from 'vue';
+import { snaprtcCapture, type SnapRTCCapture } from 'snaprtc';
+
+const video = ref<HTMLVideoElement>()
+const stage = ref<HTMLCanvasElement>()
+
+const params = new URLSearchParams(window.location.search)
+
+const sessionId = ref(params.get("sessionId") ?? "")
+
+const props = defineProps<{
+  signalingServer: string,
+}>()
+
+const showCameraButton = ref(false)
+
+const started = ref(false)
+
+let streaming = false
+
+let snaprtc: SnapRTCCapture | undefined;
+
+watch (sessionId, (sid) => {
+  snaprtc = snaprtcCapture(sid, {
+    signalingServer: props.signalingServer,
+    connectFn: (s) => {
+      showCameraButton.value = true
+    }
+  })
+}, { immediate: true })
+
+let width = 200;
+let height = 200; // Default
+
+/**
+ * The user has started to camera.
+ */
+async function handleStartCamera() {
+  if (!snaprtc) {
+    return
+  }
+
+  started.value = true
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: true,
+    audio: false
+  })
+
+  // Set up the video.
+  video.value!.srcObject = stream;
+  video.value!.play();
+
+  video.value!.addEventListener("canplay", () => {
+    if (streaming) {
+      return
+    }
+
+    height =  (video.value!.videoHeight / video.value!.videoWidth) * width;
+
+    video.value!.setAttribute("width", `${width}`);
+    video.value!.setAttribute("height", `${height}`);
+    stage.value!.setAttribute("width", `${width}`);
+    stage.value!.setAttribute("height", `${height}`);
+
+    streaming = true
+  }, false)
+}
+
+/**
+ * The user has clicked the shutter button.
+ */
+function handleShutterClick() {
+  const context = stage.value!.getContext("2d")!;
+
+  context.drawImage(video.value!, 0, 0, width, height);
+
+  // const data = canvas.toDataURL("image/png");
+  stage.value!.toBlob(async blob => {
+    if (!snaprtc) return
+    if (blob) await snaprtc.sendBlob(blob)
+  }, "image/png", 0.8)
+}
+</script>
+```
+
+## Useful Utility Functions
+
+The following function may be useful as it allows converting the incoming binary buffer into a data URL:
+
+```ts
+/**
+ * Invoked when a photo is received from the remote capture side.,
+ * @param photo An `ArrayBuffer` which contains the received photo
+ */
+function handlePhoto(photo: Uint8Array) {
+  console.log(photo)
+
+  const app = $divById("app")
+
+  const photoDataUrl = "data:image/png;base64," + arrayBufferToBase64(photo)
+
+  app.innerHTML += `
+    <br />
+    <img src="${photoDataUrl}" />
+  `
+}
+
+// https://stackoverflow.com/a/9458996/116051
+function arrayBufferToBase64( buffer: ArrayBuffer ) {
+  var binary = '';
+  var bytes = new Uint8Array( buffer );
+  var len = bytes.byteLength;
+  for (var i = 0; i < len; i++) {
+      binary += String.fromCharCode( bytes[ i ] );
+  }
+  return window.btoa( binary );
+}
+```
