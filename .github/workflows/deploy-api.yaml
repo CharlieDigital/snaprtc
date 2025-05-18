@@ -17,7 +17,7 @@ jobs:
       - name: Authenticate with Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          project_id: snaprtc-app
+          project_id: xeroq-app
           credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
 
       - name: Build Signaling API
@@ -26,13 +26,13 @@ jobs:
           docker buildx build \
             --push \
             --platform linux/amd64 \
-            -t us-east4-docker.pkg.dev/snaprtc-app/snaprtc-docker/snaprtc-signaling \
+            -t us-east4-docker.pkg.dev/xeroq-app/xeroq-docker/xeroq-signaling \
             -f Dockerfile .
 
       - name: Deploy Signaling API
         run: |
-          gcloud run deploy snaprtc-signaling \
-            --image=us-east4-docker.pkg.dev/snaprtc-app/snaprtc-docker/snaprtc-signaling:latest \
+          gcloud run deploy xeroq-signaling \
+            --image=us-east4-docker.pkg.dev/xeroq-app/xeroq-docker/xeroq-signaling:latest \
             --allow-unauthenticated \
             --min-instances=0 \
             --max-instances=1 \
@@ -42,5 +42,5 @@ jobs:
             --cpu=2 \
             --memory=2Gi \
             --concurrency=250 \
-            --project=snaprtc-app \
+            --project=xeroq-app \
             --set-env-vars=DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP3SUPPORT=false
